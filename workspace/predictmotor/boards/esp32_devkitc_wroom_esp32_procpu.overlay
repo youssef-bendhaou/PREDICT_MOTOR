@@ -54,6 +54,7 @@
         compatible = "adi,adxl345";
         reg = <0>;
         spi-max-frequency = <5000000>;
+        odr = <3>;                /* 100 Hz : doit suivre la cadence de main.c */   /* <<< NOUVEAU */
     };
 };
 
