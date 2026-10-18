@@ -1,0 +1,19 @@
+mainmenu "PredictMotor"
+
+config PM_MOTEUR_CONSIGNE
+    int "Vitesse du moteur au demarrage (% de PWM, 0 = arret)"
+    range 0 100
+    default 30
+    help
+      Le moteur demarre en douceur jusqu'a cette valeur.
+      Commencer bas (30 %) pour le premier essai sur le banc.
+
+config PM_ENC_IMPULSIONS_PAR_TOUR
+    int "Impulsions comptees par tour de l'arbre de sortie"
+    default 220
+    help
+      Valeur theorique : 2 fronts x 11 impulsions du capteur Hall
+      x rapport du reducteur (environ 10). A verifier sur le banc
+      en faisant un tour exact de l'arbre a la main.
+
+source "Kconfig.zephyr"

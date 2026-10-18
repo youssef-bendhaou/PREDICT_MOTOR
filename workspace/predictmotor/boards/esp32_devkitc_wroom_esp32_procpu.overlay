@@ -1,4 +1,38 @@
-/* DevKit V1 : ADXL345 sur SPI3 (SCK=18, MISO=19, MOSI=23, CS=5) */
+/*
+ * Plan de cablage PredictMotor - ESP32 DevKit V1
+ *   ADXL345  : SPI3  SCK=18  MISO=19  MOSI=23  CS=5
+ *   BTS7960  : RPWM=25  LPWM=26  EN (R_EN + L_EN)=27
+ *   Encodeur : A=32  B=33
+ */
+#include <zephyr/dt-bindings/pwm/pwm.h>
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
+/ {
+    /* Nos propres branchements, lus par moteur.c */
+    zephyr,user {
+        /* PWM a 20 kHz (periode 50 us) : au-dela de l'oreille humaine */
+        pwms = <&ledc0 0 PWM_USEC(50) PWM_POLARITY_NORMAL>,   /* RPWM : avant   */
+               <&ledc0 1 PWM_USEC(50) PWM_POLARITY_NORMAL>;   /* LPWM : arriere */
+        moteur-en-gpios = <&gpio0 27 GPIO_ACTIVE_HIGH>;
+    };
+};
+
+&pinctrl {
+    ledc0_default: ledc0_default {
+        group1 {
+            pinmux = <LEDC_CH0_GPIO25>, <LEDC_CH1_GPIO26>;
+            output-enable;
+        };
+    };
+    pcnt_default: pcnt_default {
+        group1 {
+            pinmux = <PCNT0_CH0SIG_GPIO32>, <PCNT0_CH0CTRL_GPIO33>;
+            bias-pull-up;
+        };
+    };
+};
+
+/* Accelerometre */
 &spi3 {
     status = "okay";
 
@@ -6,5 +40,44 @@
         compatible = "adi,adxl345";
         reg = <0>;
         spi-max-frequency = <5000000>;
+    };
+};
+
+/* Generateur PWM (LEDC) pour le driver BTS7960 */
+&ledc0 {
+    pinctrl-0 = <&ledc0_default>;
+    pinctrl-names = "default";
+    status = "okay";
+    #address-cells = <1>;
+    #size-cells = <0>;
+    channel0@0 {
+        reg = <0x0>;
+        timer = <0>;
+    };
+    channel1@1 {
+        reg = <0x1>;
+        timer = <0>;
+    };
+};
+
+/* Compteur d'impulsions (PCNT) en decodeur de quadrature pour l'encodeur */
+&pcnt {
+    pinctrl-0 = <&pcnt_default>;
+    pinctrl-names = "default";
+    status = "okay";
+    #address-cells = <1>;
+    #size-cells = <0>;
+    unit0@0 {
+        reg = <0>;
+        #address-cells = <1>;
+        #size-cells = <0>;
+        filter = <100>;              /* ignore les parasites < 100 ns */
+        channelA@0 {
+            reg = <0>;
+            sig-pos-mode = <2>;      /* front montant de A  */
+            sig-neg-mode = <1>;      /* front descendant de A */
+            ctrl-h-mode = <0>;       /* B decide du sens de comptage */
+            ctrl-l-mode = <1>;
+        };
     };
 };

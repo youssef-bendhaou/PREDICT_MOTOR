@@ -1,13 +1,14 @@
 #include <zephyr/kernel.h>
-#include <zephyr/device.h>
-#include <zephyr/drivers/sensor.h>
 #include <zephyr/logging/log.h>
+#include "vibration.h"
+#include "moteur.h"
+#include "vitesse.h"
 
-LOG_MODULE_REGISTER(acq, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
-#define PERIODE_MS 10   /* 100 Hz */
-
-static const struct device *const accel = DEVICE_DT_GET_ONE(adi_adxl345);
+#define FE_HZ      100               /* echantillons par seconde */
+#define PERIODE_MS (1000 / FE_HZ)
+#define FENETRE    FE_HZ             /* bilan chaque seconde */
 
 /* Le timer "tape" le semaphore a intervalle regulier */
 K_SEM_DEFINE(tick_sem, 0, 1);
@@ -19,37 +20,78 @@ static void tick_handler(struct k_timer *t)
 }
 K_TIMER_DEFINE(tick_timer, tick_handler, NULL);
 
+struct stats {
+    float min;
+    float max;
+};
+
+static void stats_reset(struct stats s[3])
+{
+    for (int i = 0; i < 3; i++) {
+        s[i].min = 1e9f;
+        s[i].max = -1e9f;
+    }
+}
+
+static void stats_add(struct stats s[3], const float v[3])
+{
+    for (int i = 0; i < 3; i++) {
+        s[i].min = MIN(s[i].min, v[i]);
+        s[i].max = MAX(s[i].max, v[i]);
+    }
+}
+
 int main(void)
 {
-    struct sensor_value v[3];
+    float xyz[3];
+    float tr_min = 0.0f;
+    struct stats s[3];
     uint32_t n = 0;
+    uint32_t sec = 0;
 
     printk("PredictMotor demarre\n");
 
-    if (!device_is_ready(accel)) {
-        LOG_ERR("ADXL345 non pret : verifier cablage et overlay");
+    /* Le moteur en premier : on s'assure qu'il est arrete */
+    if (moteur_init() < 0) {
+        LOG_ERR("Driver moteur (BTS7960) non pret");
         return 0;
     }
-    LOG_INF("ADXL345 OK, acquisition a %d Hz", 1000 / PERIODE_MS);
+    if (vibration_init() < 0) {
+        LOG_ERR("ADXL345 non pret : verifier cablage SPI");
+        return 0;
+    }
+    if (vitesse_init() < 0) {
+        LOG_ERR("Encodeur non pret");
+        return 0;
+    }
 
+    LOG_INF("Demarrage progressif du moteur jusqu'a %d %%", CONFIG_PM_MOTEUR_CONSIGNE);
+    moteur_rampe(CONFIG_PM_MOTEUR_CONSIGNE);
+
+    stats_reset(s);
     k_timer_start(&tick_timer, K_MSEC(PERIODE_MS), K_MSEC(PERIODE_MS));
 
     while (1) {
         k_sem_take(&tick_sem, K_FOREVER);
 
-        if (sensor_sample_fetch(accel) < 0) {
-            LOG_WRN("echec de lecture");
+        if (vibration_lire(xyz) < 0) {
+            LOG_WRN("echec de lecture ADXL345");
             continue;
         }
-        sensor_channel_get(accel, SENSOR_CHAN_ACCEL_XYZ, v);
+        stats_add(s, xyz);
 
-        /* On n'affiche qu'un echantillon sur 10 pour ne pas saturer l'UART */
-        if (++n % 10 == 0) {
-            printk("t=%u ms  x=%.2f  y=%.2f  z=%.2f m/s2\n",
-                   k_uptime_get_32(),
-                   sensor_value_to_double(&v[0]),
-                   sensor_value_to_double(&v[1]),
-                   sensor_value_to_double(&v[2]));
+        if (++n == FENETRE) {
+            sec++;
+            (void)vitesse_lire(&tr_min);
+            printk("t=%3u s | %5.0f tr/min (f_rot=%4.1f Hz) | crete-a-crete x=%.2f y=%.2f z=%.2f m/s2\n",
+                   sec,
+                   (double)tr_min,
+                   (double)(tr_min / 60.0f),
+                   (double)(s[0].max - s[0].min),
+                   (double)(s[1].max - s[1].min),
+                   (double)(s[2].max - s[2].min));
+            stats_reset(s);
+            n = 0;
         }
     }
     return 0;
