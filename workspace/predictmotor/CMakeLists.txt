@@ -10,4 +10,5 @@ target_sources(app PRIVATE
   src/vibration.c
   src/moteur.c
   src/vitesse.c
+  src/capteurs_lents.c
 )

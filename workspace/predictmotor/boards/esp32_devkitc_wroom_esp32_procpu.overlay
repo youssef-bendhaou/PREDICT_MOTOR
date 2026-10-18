@@ -3,6 +3,8 @@
  *   ADXL345  : SPI3  SCK=18  MISO=19  MOSI=23  CS=5
  *   BTS7960  : RPWM=25  LPWM=26  EN (R_EN + L_EN)=27
  *   Encodeur : A=32  B=33
+ *   INA219   : I2C0  SDA=21  SCL=22  (adresse 0x40)
+ *   DS18B20  : 1-Wire DATA=4 (+ 4,7 kohm vers 3V3)
  */
 #include <zephyr/dt-bindings/pwm/pwm.h>
 #include <zephyr/dt-bindings/gpio/gpio.h>
@@ -14,6 +16,18 @@
         pwms = <&ledc0 0 PWM_USEC(50) PWM_POLARITY_NORMAL>,   /* RPWM : avant   */
                <&ledc0 1 PWM_USEC(50) PWM_POLARITY_NORMAL>;   /* LPWM : arriere */
         moteur-en-gpios = <&gpio0 27 GPIO_ACTIVE_HIGH>;
+    };
+
+    /* Bus 1-Wire realise par logiciel sur une broche GPIO */
+    w1: w1 {
+        compatible = "zephyr,w1-gpio";
+        gpios = <&gpio0 4 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN | GPIO_PULL_UP)>;
+
+        ds18b20: ds18b20 {
+            compatible = "maxim,ds18b20";
+            family-code = <0x28>;
+            resolution = <12>;          /* 0,0625 degre, conversion 750 ms */
+        };
     };
 };
 
@@ -40,6 +54,18 @@
         compatible = "adi,adxl345";
         reg = <0>;
         spi-max-frequency = <5000000>;
+    };
+};
+
+/* Capteur de courant sur le bus I2C de la carte (deja active, SDA=21 SCL=22) */
+&i2c0 {
+    ina219: ina219@40 {
+        compatible = "ti,ina219";
+        reg = <0x40>;
+        shunt-milliohm = <100>;   /* resistance de 0,1 ohm des modules courants */
+        lsb-microamp = <100>;     /* resolution 0,1 mA, jusqu'a environ 3,2 A */
+        brng = <0>;               /* plage tension 16 V (on mesure 12 V) */
+        pg = <3>;                 /* +/-320 mV sur le shunt = +/-3,2 A */
     };
 };
 
@@ -74,7 +100,7 @@
         filter = <100>;              /* ignore les parasites < 100 ns */
         channelA@0 {
             reg = <0>;
-            sig-pos-mode = <2>;      /* front montant de A  */
+            sig-pos-mode = <2>;      /* front montant de A    */
             sig-neg-mode = <1>;      /* front descendant de A */
             ctrl-h-mode = <0>;       /* B decide du sens de comptage */
             ctrl-l-mode = <1>;

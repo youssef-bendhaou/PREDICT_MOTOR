@@ -3,6 +3,7 @@
 #include "vibration.h"
 #include "moteur.h"
 #include "vitesse.h"
+#include "capteurs_lents.h"
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
@@ -41,6 +42,30 @@ static void stats_add(struct stats s[3], const float v[3])
     }
 }
 
+static void afficher_bilan(uint32_t sec, float tr_min, const struct stats s[3])
+{
+    struct mesures_lentes m;
+
+    capteurs_lents_lire(&m);
+
+    printk("t=%3u s | %5.0f tr/min (f_rot=%4.1f Hz) | crete-a-crete x=%.2f y=%.2f z=%.2f m/s2\n",
+           sec, (double)tr_min, (double)(tr_min / 60.0f),
+           (double)(s[0].max - s[0].min),
+           (double)(s[1].max - s[1].min),
+           (double)(s[2].max - s[2].min));
+
+    if (m.courant_ok) {
+        printk("        | I=%.2f A  U=%.1f V", (double)m.courant_a, (double)m.tension_v);
+    } else {
+        printk("        | I=--  U=--");
+    }
+    if (m.temperature_ok) {
+        printk("  | T=%.1f C\n", (double)m.temperature_c);
+    } else {
+        printk("  | T=--\n");
+    }
+}
+
 int main(void)
 {
     float xyz[3];
@@ -65,6 +90,9 @@ int main(void)
         return 0;
     }
 
+    /* Capteurs lents : utiles mais pas vitaux, ils tournent a cote */
+    capteurs_lents_demarrer();
+
     LOG_INF("Demarrage progressif du moteur jusqu'a %d %%", CONFIG_PM_MOTEUR_CONSIGNE);
     moteur_rampe(CONFIG_PM_MOTEUR_CONSIGNE);
 
@@ -83,13 +111,7 @@ int main(void)
         if (++n == FENETRE) {
             sec++;
             (void)vitesse_lire(&tr_min);
-            printk("t=%3u s | %5.0f tr/min (f_rot=%4.1f Hz) | crete-a-crete x=%.2f y=%.2f z=%.2f m/s2\n",
-                   sec,
-                   (double)tr_min,
-                   (double)(tr_min / 60.0f),
-                   (double)(s[0].max - s[0].min),
-                   (double)(s[1].max - s[1].min),
-                   (double)(s[2].max - s[2].min));
+            afficher_bilan(sec, tr_min, s);
             stats_reset(s);
             n = 0;
         }
