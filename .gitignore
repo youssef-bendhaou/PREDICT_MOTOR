@@ -1,0 +1,4 @@
+# Resultats de compilation (se regenerent avec west build)
+build/
+workspace/build-test/
+.vscode/

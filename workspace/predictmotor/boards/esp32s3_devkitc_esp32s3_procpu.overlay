@@ -1,0 +1,10 @@
+/* ESP32-S3 : ADXL345 sur SPI2 (SCK=12, MISO=13, MOSI=11, CS=10) */
+&spi2 {
+    status = "okay";
+
+    adxl345: adxl345@0 {
+        compatible = "adi,adxl345";
+        reg = <0>;
+        spi-max-frequency = <5000000>;
+    };
+};

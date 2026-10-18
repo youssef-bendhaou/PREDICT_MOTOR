@@ -1,0 +1,4 @@
+# Fins de ligne Linux partout (les fichiers sont utilises dans l'atelier Linux)
+* text=auto eol=lf
+# Sauf les scripts PowerShell, qui restent au format Windows
+*.ps1 text eol=crlf

@@ -1,0 +1,17 @@
+{
+  "name": "PredictMotor (Zephyr ESP32)",
+  "image": "zephyr-esp32",
+  "workspaceMount": "source=${localWorkspaceFolder}/workspace,target=/workspace,type=bind",
+  "workspaceFolder": "/workspace",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools",
+        "nordic-semiconductor.nrf-devicetree"
+      ],
+      "settings": {
+        "C_Cpp.default.compileCommands": "/workspace/predictmotor/build/compile_commands.json"
+      }
+    }
+  }
+}

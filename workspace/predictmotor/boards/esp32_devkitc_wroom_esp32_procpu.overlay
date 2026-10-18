@@ -1,0 +1,10 @@
+/* DevKit V1 : ADXL345 sur SPI3 (SCK=18, MISO=19, MOSI=23, CS=5) */
+&spi3 {
+    status = "okay";
+
+    adxl345: adxl345@0 {
+        compatible = "adi,adxl345";
+        reg = <0>;
+        spi-max-frequency = <5000000>;
+    };
+};
