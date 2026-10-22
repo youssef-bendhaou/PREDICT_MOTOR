@@ -2,3 +2,4 @@
 build/
 workspace/build-test/
 .vscode/
+serveur/.env

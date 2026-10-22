@@ -7,9 +7,9 @@
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
-#define FE_HZ      100               /* echantillons par seconde */
+#define FE_HZ 100 /* echantillons par seconde */
 #define PERIODE_MS (1000 / FE_HZ)
-#define FENETRE    FE_HZ             /* bilan chaque seconde */
+#define FENETRE FE_HZ /* bilan chaque seconde */
 
 /* Le timer "tape" le semaphore a intervalle regulier */
 K_SEM_DEFINE(tick_sem, 0, 1);
@@ -21,14 +21,16 @@ static void tick_handler(struct k_timer *t)
 }
 K_TIMER_DEFINE(tick_timer, tick_handler, NULL);
 
-struct stats {
+struct stats
+{
     float min;
     float max;
 };
 
 static void stats_reset(struct stats s[3])
 {
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 3; i++)
+    {
         s[i].min = 1e9f;
         s[i].max = -1e9f;
     }
@@ -36,7 +38,8 @@ static void stats_reset(struct stats s[3])
 
 static void stats_add(struct stats s[3], const float v[3])
 {
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 3; i++)
+    {
         s[i].min = MIN(s[i].min, v[i]);
         s[i].max = MAX(s[i].max, v[i]);
     }
@@ -54,14 +57,20 @@ static void afficher_bilan(uint32_t sec, float tr_min, const struct stats s[3])
            (double)(s[1].max - s[1].min),
            (double)(s[2].max - s[2].min));
 
-    if (m.courant_ok) {
+    if (m.courant_ok)
+    {
         printk("        | I=%.2f A  U=%.1f V", (double)m.courant_a, (double)m.tension_v);
-    } else {
+    }
+    else
+    {
         printk("        | I=--  U=--");
     }
-    if (m.temperature_ok) {
+    if (m.temperature_ok)
+    {
         printk("  | T=%.1f C\n", (double)m.temperature_c);
-    } else {
+    }
+    else
+    {
         printk("  | T=--\n");
     }
 }
@@ -77,15 +86,18 @@ int main(void)
     printk("PredictMotor demarre\n");
 
     /* Le moteur en premier : on s'assure qu'il est arrete */
-    if (moteur_init() < 0) {
+    if (moteur_init() < 0)
+    {
         LOG_ERR("Driver moteur (BTS7960) non pret");
         return 0;
     }
-    if (vibration_init() < 0) {
+    if (vibration_init() < 0)
+    {
         LOG_ERR("ADXL345 non pret : verifier cablage SPI");
         return 0;
     }
-    if (vitesse_init() < 0) {
+    if (vitesse_init() < 0)
+    {
         LOG_ERR("Encodeur non pret");
         return 0;
     }
@@ -99,18 +111,26 @@ int main(void)
     stats_reset(s);
     k_timer_start(&tick_timer, K_MSEC(PERIODE_MS), K_MSEC(PERIODE_MS));
 
-    while (1) {
+    while (1)
+    {
         k_sem_take(&tick_sem, K_FOREVER);
 
-        if (vibration_lire(xyz) < 0) {
+        if (vibration_lire(xyz) < 0)
+        {
             LOG_WRN("echec de lecture ADXL345");
             continue;
         }
         stats_add(s, xyz);
 
-        if (++n == FENETRE) {
+        if (++n == FENETRE)
+        {
             sec++;
             (void)vitesse_lire(&tr_min);
+
+            /* DIAGNOSTIC : la derniere mesure brute de la seconde */
+            printk("        | brut : x=%.2f y=%.2f z=%.2f m/s2\n",
+                   (double)xyz[0], (double)xyz[1], (double)xyz[2]);
+
             afficher_bilan(sec, tr_min, s);
             stats_reset(s);
             n = 0;
