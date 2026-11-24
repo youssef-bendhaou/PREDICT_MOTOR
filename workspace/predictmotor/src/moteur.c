@@ -1,85 +1,76 @@
 #include <errno.h>
-#include <stdlib.h>
+#include <string.h>
 #include <zephyr/kernel.h>
-#include <zephyr/drivers/pwm.h>
 #include <zephyr/drivers/gpio.h>
+#include <zephyr/shell/shell.h>
+#include <zephyr/logging/log.h>
 #include "moteur.h"
+
+LOG_MODULE_REGISTER(moteur, LOG_LEVEL_INF);
 
 #define UTILISATEUR DT_PATH(zephyr_user)
 
-#define PAS_RAMPE    5    /* % par pas */
-#define DELAI_RAMPE  50   /* ms entre deux pas */
+/* Ventilateur Sunon DP200A (moteur a poles ombres) : pas de variation
+ * de vitesse, seulement marche / arret par le relais */
+static const struct gpio_dt_spec relais = GPIO_DT_SPEC_GET(UTILISATEUR, relais_gpios);
 
-static const struct pwm_dt_spec pwm_avant   = PWM_DT_SPEC_GET_BY_IDX(UTILISATEUR, 0);
-static const struct pwm_dt_spec pwm_arriere = PWM_DT_SPEC_GET_BY_IDX(UTILISATEUR, 1);
-static const struct gpio_dt_spec enable     = GPIO_DT_SPEC_GET(UTILISATEUR, moteur_en_gpios);
+static bool en_marche;
 
-static int consigne_actuelle;
-
-/* BTS7960 : une seule entree PWM active a la fois, l'autre a 0 */
-static int appliquer(int pourcent)
+int moteur_init(void)
 {
-    uint32_t impulsion = pwm_avant.period / 100U * (uint32_t)abs(pourcent);
-    int ret;
+    if (!gpio_is_ready_dt(&relais))
+    {
+        return -ENODEV;
+    }
+    /* Securite : relais ouvert (ventilateur arrete) avant tout */
+    en_marche = false;
+    return gpio_pin_configure_dt(&relais, GPIO_OUTPUT_INACTIVE);
+}
 
-    if (pourcent >= 0) {
-        ret = pwm_set_pulse_dt(&pwm_arriere, 0);
-        if (ret == 0) {
-            ret = pwm_set_pulse_dt(&pwm_avant, impulsion);
-        }
-    } else {
-        ret = pwm_set_pulse_dt(&pwm_avant, 0);
-        if (ret == 0) {
-            ret = pwm_set_pulse_dt(&pwm_arriere, impulsion);
-        }
+int moteur_marche(void)
+{
+    int ret = gpio_pin_set_dt(&relais, 1);
+
+    if (ret == 0)
+    {
+        en_marche = true;
+        LOG_INF("ventilateur EN MARCHE");
     }
     return ret;
 }
 
-int moteur_init(void)
+int moteur_arret(void)
 {
-    if (!pwm_is_ready_dt(&pwm_avant) || !pwm_is_ready_dt(&pwm_arriere) ||
-        !gpio_is_ready_dt(&enable)) {
-        return -ENODEV;
-    }
+    int ret = gpio_pin_set_dt(&relais, 0);
 
-    /* Securite : driver coupe et PWM a zero avant tout */
-    int ret = gpio_pin_configure_dt(&enable, GPIO_OUTPUT_INACTIVE);
-
-    if (ret < 0) {
-        return ret;
+    if (ret == 0)
+    {
+        en_marche = false;
+        LOG_INF("ventilateur ARRETE");
     }
-    consigne_actuelle = 0;
-    ret = appliquer(0);
-    if (ret < 0) {
-        return ret;
-    }
-    return gpio_pin_set_dt(&enable, 1);
+    return ret;
 }
 
-int moteur_rampe(int cible)
+bool moteur_en_marche(void)
 {
-    cible = CLAMP(cible, -100, 100);
+    return en_marche;
+}
 
-    /* Monter ou descendre par petits pas : evite les pics de courant */
-    while (consigne_actuelle != cible) {
-        if (consigne_actuelle < cible) {
-            consigne_actuelle = MIN(consigne_actuelle + PAS_RAMPE, cible);
-        } else {
-            consigne_actuelle = MAX(consigne_actuelle - PAS_RAMPE, cible);
-        }
-        int ret = appliquer(consigne_actuelle);
+/* Commande console : moteur on | moteur off */
+static int cmd_moteur(const struct shell *sh, size_t argc, char **argv)
+{
+    ARG_UNUSED(argc);
 
-        if (ret < 0) {
-            return ret;
-        }
-        k_msleep(DELAI_RAMPE);
+    if (strcmp(argv[1], "on") == 0)
+    {
+        return moteur_marche();
     }
-    return 0;
+    if (strcmp(argv[1], "off") == 0)
+    {
+        return moteur_arret();
+    }
+    shell_error(sh, "usage : moteur on|off");
+    return -EINVAL;
 }
-
-void moteur_arret(void)
-{
-    (void)moteur_rampe(0);
-    (void)gpio_pin_set_dt(&enable, 0);
-}
+SHELL_CMD_ARG_REGISTER(moteur, NULL, "Marche/arret du ventilateur : moteur on|off",
+                       cmd_moteur, 2, 0);

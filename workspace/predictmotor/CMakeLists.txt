@@ -11,4 +11,5 @@ target_sources(app PRIVATE
   src/moteur.c
   src/vitesse.c
   src/capteurs_lents.c
+  src/pzem.c
 )

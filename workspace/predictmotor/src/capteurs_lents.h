@@ -4,9 +4,10 @@
 #include <stdbool.h>
 
 /* Les dernieres mesures des capteurs lents */
-struct mesures_lentes {
-    float courant_a;
-    float tension_v;
+struct mesures_lentes
+{
+    float courant_a;   /* courant efficace du ventilateur (TA12-100) */
+    float decalage_mv; /* milieu du signal : ~1650 mV si le pont diviseur est bon */
     float temperature_c;
     bool courant_ok;
     bool temperature_ok;
