@@ -107,7 +107,7 @@ static void afficher_bilan(uint32_t sec, float tr_min, const struct stats s[3], 
 
     if (m.courant_ok)
     {
-        printk("        | I=%.3f A (milieu %.0f mV)", (double)m.courant_a, (double)m.decalage_mv);
+        printk("        | I=%.3f A U=%.1f V P=%.1f W PF=%.2f", (double)m.courant_a, (double)m.tension_v, (double)m.puissance_w, (double)m.facteur_p);
     }
     else
     {

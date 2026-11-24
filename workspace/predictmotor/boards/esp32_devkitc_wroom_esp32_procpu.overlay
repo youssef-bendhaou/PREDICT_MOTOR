@@ -1,28 +1,27 @@
 /*
- * Plan de cablage PredictMotor - ESP32 DevKit V1
+ * Plan de cablage PredictMotor - ESP32 38 broches (esp32_devkitc_wroom)
  * Banc : ventilateur Sunon DP200A 230 V AC commande par relais
  *
- *   ADXL345  : SPI3  SCK=18  MISO=19  MOSI=23  CS=5   (inchange)
- *   DS18B20  : 1-Wire DATA=4 (+ 4,7 kohm vers 3V3)    (inchange)
- *   Relais   : IN=26  (VCC du module sur 5V/VIN)
- *   TCRT5000 : D0=27  (1 ruban blanc sur le moyeu = 1 impulsion par tour)
- *   TA12-100 : S=34 (ADC1 canal 6), G = point milieu 1,65 V (2 x 10 kohm + 10 uF)
+ *   ADXL345   : SPI3  SCK=18  MISO=19  MOSI=23  CS=5
+ *   DS18B20   : 1-Wire DATA=4 (module avec resistance de tirage)
+ *   Relais    : IN=26  (VCC du module sur 3V3, low level trigger)
+ *   TCRT5000  : D0=27  (optionnel, vitesse.c continue sans lui)
+ *   PZEM-004T : UART2  TX=17 -> RX du PZEM, RX=16 <- TX du PZEM, 9600 8N1
  *
- * Le 230 V ne passe que par les contacts du relais (COM -> NO)
- * et dans le tore du TA12-100 (phase seule, 10 tours).
+ * Le 230 V ne passe que par les contacts du relais (COM -> NO),
+ * par les bornes L/N du PZEM et dans le tore du PZEM (phase seule, 10 tours).
  */
 #include <zephyr/dt-bindings/gpio/gpio.h>
-#include <zephyr/dt-bindings/adc/adc.h>
+#include <zephyr/dt-bindings/pinctrl/esp-pinctrl-common.h>
+#include <dt-bindings/pinctrl/esp32-pinctrl.h>
 
 / {
-    /* Nos propres branchements, lus par moteur.c, vitesse.c et capteurs_lents.c */
+    /* Nos propres branchements, lus par moteur.c et vitesse.c */
     zephyr,user {
-        /* Module relais declenche a l'etat haut.
-         * S'il est marque "low level trigger" : GPIO_ACTIVE_LOW */
-        relais-gpios = <&gpio0 26 GPIO_ACTIVE_LOW>;        /* TCRT5000 : D0 passe a 0 quand le ruban blanc passe devant */
+        /* Module relais "low level trigger" : actif a l'etat bas */
+        relais-gpios = <&gpio0 26 GPIO_ACTIVE_LOW>;
+        /* TCRT5000 : D0 passe a 0 quand le ruban blanc passe devant */
         tachy-gpios = <&gpio0 27 GPIO_ACTIVE_LOW>;
-        /* TA12-100 : GPIO 34 = ADC1 canal 6 */
-        io-channels = <&adc0 6>;
     };
 
     /* Bus 1-Wire realise par logiciel sur une broche GPIO */
@@ -50,17 +49,23 @@
     };
 };
 
-/* Convertisseur analogique pour le TA12-100 */
-&adc0 {
-    status = "okay";
-    #address-cells = <1>;
-    #size-cells = <0>;
-
-    channel@6 {
-        reg = <6>;
-        zephyr,gain = "ADC_GAIN_1_4";   /* attenuation 11 dB : 0 a ~3,1 V */
-        zephyr,reference = "ADC_REF_INTERNAL";
-        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
-        zephyr,resolution = <12>;
+/* PZEM-004T sur UART2 (Modbus RTU) */
+&pinctrl {
+    uart2_pzem: uart2_pzem {
+        group1 {
+            pinmux = <UART2_TX_GPIO17>;
+            output-high;
+        };
+        group2 {
+            pinmux = <UART2_RX_GPIO16>;
+            bias-pull-up;
+        };
     };
+};
+
+&uart2 {
+    status = "okay";
+    current-speed = <9600>;
+    pinctrl-0 = <&uart2_pzem>;
+    pinctrl-names = "default";
 };

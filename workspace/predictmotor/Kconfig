@@ -33,3 +33,7 @@ config PM_CT_TOURS
       plusieurs fois dans le tore multiplie le signal.
 
 source "Kconfig.zephyr"
+config PM_PZEM_TOURS
+	int "Nombre de passages de la phase dans le tore du PZEM"
+	default 10
+	range 1 50
