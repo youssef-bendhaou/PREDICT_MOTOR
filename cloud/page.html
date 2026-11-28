@@ -13,6 +13,12 @@
   header { display:flex; justify-content:space-between; align-items:center; padding:14px 20px; }
   header h1 { font-size:18px; margin:0; font-weight:600; }
   #liaison { font-size:13px; color:var(--gris); }
+  .entete-droite { display:flex; gap:16px; align-items:center; }
+  .entete-droite a, .entete-droite button { font-size:13px; color:var(--gris); background:none;
+      border:1px solid #2a3038; border-radius:6px; padding:5px 10px; cursor:pointer; text-decoration:none; }
+  .entete-droite a:hover, .entete-droite button:hover { color:var(--texte); border-color:var(--gris); }
+  #explication { font-size:17px; line-height:1.5; padding:6px 2px; }
+  #depuis { font-size:13px; color:var(--gris); text-align:center; margin-top:8px; }
   main { padding:0 20px 20px; display:grid; gap:14px; grid-template-columns: repeat(4, 1fr); }
   .carte { background:var(--carte); border-radius:10px; padding:14px; }
   .carte h2 { font-size:13px; color:var(--gris); margin:0 0 8px; font-weight:500; }
@@ -29,12 +35,18 @@
 <body>
 <header>
   <h1>PredictMotor – diagnostic du ventilateur (<span id="machine">banc1</span>)</h1>
-  <span id="liaison">connexion…</span>
+  <div class="entete-droite">
+    <span id="liaison">connexion…</span>
+    <button id="btnTest" title="Envoyer une alerte de test (e-mail / Telegram)">🔔 Tester l'alerte</button>
+    <a href="/logout">Déconnexion</a>
+  </div>
 </header>
 <main>
-  <div class="carte large"><h2>État du moteur (vote sur 10 s)</h2><div id="etat">—</div></div>
+  <div class="carte large"><h2>État du moteur (vote sur 10 s)</h2><div id="etat">—</div><div id="depuis"></div></div>
   <div class="carte"><h2>Confiance du vote</h2><div class="valeur" id="confiance">—</div></div>
   <div class="carte"><h2>Détecteur d'anomalies</h2><div class="valeur" id="anomalie">—</div></div>
+
+  <div class="carte entier"><h2>Pourquoi ce diagnostic ?</h2><div id="explication">—</div></div>
 
   <div class="carte entier">
     <h2>Historique (15 dernières minutes au plus)</h2>
@@ -94,7 +106,10 @@ function remplir(id, texte, couleur) {
 async function rafraichir() {
   try {
     const r = await fetch(`/api/etat?machine=${encodeURIComponent(machine)}&n=900`);
+    if (r.status === 401) { location.href = "/login"; return; }
     const d = await r.json();
+    const btn = document.getElementById("btnTest");
+    btn.style.display = (d.alertes && d.alertes.length) ? "" : "none";
     const lien = document.getElementById("liaison");
     if (!d.dernier) { lien.textContent = "en attente de mesures…"; return; }
     lien.textContent = d.age_s < 5 ? `● en direct (dernière mesure il y a ${d.age_s} s)`
@@ -103,6 +118,10 @@ async function rafraichir() {
 
     const x = d.dernier, code = String(x.etat_code);
     remplir("etat", TEXTE[code] || x.etat, COULEUR[code]);
+    const min = Math.floor((d.depuis_s || 0) / 60), sec = (d.depuis_s || 0) % 60;
+    document.getElementById("depuis").textContent =
+      `depuis ${min ? min + " min " : ""}${sec} s` + (d.alerte_en_cours ? "  •  alerte envoyée" : "");
+    document.getElementById("explication").textContent = x.explication || "—";
     remplir("confiance", x.confiance !== undefined ? Math.round(x.confiance * 100) + " %" : "—",
             x.confiance >= 0.8 ? "#2e9d57" : (x.confiance !== undefined ? "#e8871e" : null));
     remplir("anomalie", x.anomalie === undefined ? "—" : (x.anomalie ? "comportement inhabituel" : "RAS"),
@@ -132,6 +151,13 @@ async function rafraichir() {
     document.getElementById("liaison").textContent = "serveur injoignable";
   }
 }
+document.getElementById("btnTest").addEventListener("click", async () => {
+  const r = await fetch("/api/test-alerte", { method: "POST" });
+  const d = await r.json();
+  alert(d.envoye ? "Alerte de test envoyée (" + d.canaux.join(" + ") + "). Vérifie ta boîte mail."
+                 : "Échec : " + (d.detail || "erreur"));
+});
+
 rafraichir();
 setInterval(rafraichir, 2000);
 </script>

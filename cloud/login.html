@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PredictMotor – Connexion</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+         font-family: system-ui, sans-serif; background:#111418; color:#e6e8eb; }
+  form { background:#1b2027; padding:32px; border-radius:12px; width:min(360px, 92vw); }
+  h1 { font-size:20px; margin:0 0 4px; }
+  p.sous-titre { margin:0 0 24px; color:#8a929c; font-size:14px; }
+  label { display:block; font-size:13px; color:#8a929c; margin:14px 0 6px; }
+  input { width:100%; padding:10px 12px; border-radius:8px; border:1px solid #2a3038;
+          background:#111418; color:#e6e8eb; font-size:15px; }
+  input:focus { outline:none; border-color:#2e9d57; }
+  button { width:100%; margin-top:22px; padding:11px; border:0; border-radius:8px;
+           background:#2e9d57; color:white; font-size:15px; font-weight:600; cursor:pointer; }
+  button:hover { background:#278a4c; }
+  .erreur { color:#e06c6c; font-size:13px; min-height:18px; margin-top:12px; }
+</style>
+</head>
+<body>
+<form method="post" action="/login">
+  <h1>PredictMotor</h1>
+  <p class="sous-titre">Maintenance prédictive du ventilateur</p>
+  <label for="user">Identifiant</label>
+  <input id="user" name="user" autocomplete="username" required autofocus>
+  <label for="password">Mot de passe</label>
+  <input id="password" name="password" type="password" autocomplete="current-password" required>
+  <button type="submit">Se connecter</button>
+  <div class="erreur">{{ERREUR}}</div>
+</form>
+</body>
+</html>
