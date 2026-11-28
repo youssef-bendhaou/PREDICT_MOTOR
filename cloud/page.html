@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PredictMotor – Diagnostic</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root { --fond:#111418; --carte:#1b2027; --texte:#e6e8eb; --gris:#8a929c;
+          --vert:#2e9d57; --orange:#e8871e; --rouge:#d64545; --neutre:#5a6270; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, sans-serif; background:var(--fond); color:var(--texte); }
+  header { display:flex; justify-content:space-between; align-items:center; padding:14px 20px; }
+  header h1 { font-size:18px; margin:0; font-weight:600; }
+  #liaison { font-size:13px; color:var(--gris); }
+  main { padding:0 20px 20px; display:grid; gap:14px; grid-template-columns: repeat(4, 1fr); }
+  .carte { background:var(--carte); border-radius:10px; padding:14px; }
+  .carte h2 { font-size:13px; color:var(--gris); margin:0 0 8px; font-weight:500; }
+  .large { grid-column: span 2; }
+  .entier { grid-column: 1 / -1; }
+  #etat { font-size:44px; font-weight:700; text-align:center; padding:18px 0; border-radius:8px; }
+  .valeur { font-size:30px; font-weight:600; text-align:center; padding:22px 0; border-radius:8px; }
+  canvas.bande { width:100%; height:26px; display:block; border-radius:4px; background:#0c0f12; }
+  .legende-bande { font-size:12px; color:var(--gris); margin:6px 0 2px; }
+  .graph { height:220px; }
+  @media (max-width: 800px) { main { grid-template-columns: 1fr; } .large { grid-column:auto; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>PredictMotor – diagnostic du ventilateur (<span id="machine">banc1</span>)</h1>
+  <span id="liaison">connexion…</span>
+</header>
+<main>
+  <div class="carte large"><h2>État du moteur (vote sur 10 s)</h2><div id="etat">—</div></div>
+  <div class="carte"><h2>Confiance du vote</h2><div class="valeur" id="confiance">—</div></div>
+  <div class="carte"><h2>Détecteur d'anomalies</h2><div class="valeur" id="anomalie">—</div></div>
+
+  <div class="carte entier">
+    <h2>Historique (15 dernières minutes au plus)</h2>
+    <div class="legende-bande">Diagnostic de l'IA</div><canvas class="bande" id="bandeIA"></canvas>
+    <div class="legende-bande" id="titreVerite">Vérité (simulateur)</div><canvas class="bande" id="bandeVerite"></canvas>
+  </div>
+
+  <div class="carte large"><h2>Probabilités du modèle</h2><div class="graph"><canvas id="gProbas"></canvas></div></div>
+  <div class="carte large"><h2>Vibrations RMS (m/s²)</h2><div class="graph"><canvas id="gVib"></canvas></div></div>
+  <div class="carte large"><h2>Facteur de puissance (seuil 0,715)</h2><div class="graph"><canvas id="gPF"></canvas></div></div>
+  <div class="carte"><h2>Puissance</h2><div class="valeur" id="puissance">—</div></div>
+  <div class="carte"><h2>Température moteur</h2><div class="valeur" id="temperature">—</div></div>
+</main>
+
+<script>
+const machine = new URLSearchParams(location.search).get("machine") || "banc1";
+document.getElementById("machine").textContent = machine;
+
+const COULEUR = { "-2":"#5a6270", "-1":"#5a6270", "0":"#2e9d57", "1":"#e8871e", "2":"#d64545" };
+const TEXTE   = { "-2":"indisponible", "-1":"arrêt", "0":"normal", "1":"balourd", "2":"obstruction" };
+
+Chart.defaults.color = "#8a929c";
+Chart.defaults.borderColor = "#2a3038";
+const options = (min, max) => ({ animation:false, maintainAspectRatio:false,
+  plugins:{ legend:{ labels:{ boxWidth:12 } } },
+  elements:{ point:{ radius:0 }, line:{ borderWidth:2 } },
+  scales:{ x:{ ticks:{ maxTicksLimit:6 } }, y:{ min, max } } });
+const serie = (label, color) => ({ label, data:[], borderColor:color, backgroundColor:color });
+
+const gProbas = new Chart(document.getElementById("gProbas"), { type:"line",
+  data:{ labels:[], datasets:[serie("normal","#2e9d57"), serie("balourd","#e8871e"), serie("obstruction","#d64545")] },
+  options: options(0, 1) });
+const gVib = new Chart(document.getElementById("gVib"), { type:"line",
+  data:{ labels:[], datasets:[serie("rms_x","#6aa9ff"), serie("rms_y","#f2c94c"), serie("rms_z","#bb86fc")] },
+  options: options() });
+const gPF = new Chart(document.getElementById("gPF"), { type:"line",
+  data:{ labels:[], datasets:[serie("facteur de puissance","#56c7c7"), { ...serie("seuil","#d64545"), borderDash:[6,4], borderWidth:1 }] },
+  options: options(0.6, 0.9) });
+
+function bande(id, valeurs) {
+  const c = document.getElementById(id), ctx = c.getContext("2d");
+  c.width = c.clientWidth; c.height = c.clientHeight;
+  ctx.clearRect(0, 0, c.width, c.height);
+  const n = valeurs.length; if (!n) return;
+  const l = c.width / n;
+  valeurs.forEach((v, i) => {
+    ctx.fillStyle = (v === null || v === undefined) ? "#0c0f12" : COULEUR[String(Math.round(v))];
+    ctx.fillRect(Math.floor(i * l), 0, Math.ceil(l) + 1, c.height);
+  });
+}
+
+function remplir(id, texte, couleur) {
+  const e = document.getElementById(id);
+  e.textContent = texte; e.style.background = couleur || "transparent";
+}
+
+async function rafraichir() {
+  try {
+    const r = await fetch(`/api/etat?machine=${encodeURIComponent(machine)}&n=900`);
+    const d = await r.json();
+    const lien = document.getElementById("liaison");
+    if (!d.dernier) { lien.textContent = "en attente de mesures…"; return; }
+    lien.textContent = d.age_s < 5 ? `● en direct (dernière mesure il y a ${d.age_s} s)`
+                                   : `○ pas de mesure depuis ${Math.round(d.age_s)} s`;
+    lien.style.color = d.age_s < 5 ? "#2e9d57" : "#e8871e";
+
+    const x = d.dernier, code = String(x.etat_code);
+    remplir("etat", TEXTE[code] || x.etat, COULEUR[code]);
+    remplir("confiance", x.confiance !== undefined ? Math.round(x.confiance * 100) + " %" : "—",
+            x.confiance >= 0.8 ? "#2e9d57" : (x.confiance !== undefined ? "#e8871e" : null));
+    remplir("anomalie", x.anomalie === undefined ? "—" : (x.anomalie ? "comportement inhabituel" : "RAS"),
+            x.anomalie === undefined ? null : (x.anomalie ? "#e8871e" : "#2e9d57"));
+    remplir("puissance", x.puissance_w != null ? x.puissance_w.toFixed(1) + " W" : "—");
+    remplir("temperature", x.temp_c != null ? x.temp_c.toFixed(1) + " °C" : "—",
+            x.temp_c >= 50 ? "#d64545" : (x.temp_c >= 40 ? "#e8871e" : null));
+
+    const h = d.historique;
+    bande("bandeIA", h.map(p => p.etat_code));
+    const verite = h.map(p => p.etat_simule);
+    const aVerite = verite.some(v => v !== null && v !== undefined);
+    document.getElementById("titreVerite").style.display = aVerite ? "" : "none";
+    document.getElementById("bandeVerite").style.display = aVerite ? "" : "none";
+    if (aVerite) bande("bandeVerite", verite);
+
+    const heures = h.map(p => new Date(p.t * 1000).toLocaleTimeString("fr-FR"));
+    for (const [g, cles] of [[gProbas, ["p_normal","p_balourd","p_obstruction"]],
+                             [gVib, ["rms_x","rms_y","rms_z"]],
+                             [gPF, ["facteur_p"]]]) {
+      g.data.labels = heures;
+      cles.forEach((k, i) => g.data.datasets[i].data = h.map(p => p[k] ?? null));
+      if (g === gPF) g.data.datasets[1].data = h.map(() => 0.715);
+      g.update();
+    }
+  } catch (e) {
+    document.getElementById("liaison").textContent = "serveur injoignable";
+  }
+}
+rafraichir();
+setInterval(rafraichir, 2000);
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+# Meme version de scikit-learn que dans Colab (sinon le .joblib peut refuser de se charger)
+scikit-learn==1.6.1
+pandas
+joblib

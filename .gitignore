@@ -3,3 +3,4 @@ build/
 workspace/build-test/
 .vscode/
 serveur/.env
+__pycache__/
