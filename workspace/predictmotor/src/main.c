@@ -5,6 +5,7 @@
 #include "moteur.h"
 #include "vitesse.h"
 #include "capteurs_lents.h"
+#include "reseau.h"
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
@@ -155,6 +156,7 @@ int main(void)
 
     /* Capteurs lents : utiles mais pas vitaux, ils tournent a cote */
     capteurs_lents_demarrer();
+    reseau_demarrer();
 
     if (IS_ENABLED(CONFIG_PM_MOTEUR_AU_DEMARRAGE))
     {

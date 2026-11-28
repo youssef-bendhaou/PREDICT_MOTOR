@@ -69,3 +69,7 @@
     pinctrl-0 = <&uart2_pzem>;
     pinctrl-names = "default";
 };
+
+&wifi {
+    status = "okay";
+};

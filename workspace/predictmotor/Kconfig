@@ -37,3 +37,11 @@ config PM_PZEM_TOURS
 	int "Nombre de passages de la phase dans le tore du PZEM"
 	default 10
 	range 1 50
+
+config PM_WIFI_SSID
+	string "Nom du reseau Wi-Fi"
+	default ""
+
+config PM_WIFI_PSK
+	string "Mot de passe du Wi-Fi"
+	default ""
